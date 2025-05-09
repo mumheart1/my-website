@@ -2,47 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My GitHub Page</title>
+  <title>Crazy Cattle 2D</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f7f7f7;
       margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      overflow: hidden;
+      background: #77dd77;
     }
-    header {
-      background-color: #222;
-      color: white;
-      width: 100%;
-      padding: 20px;
-      text-align: center;
-    }
-    main {
-      max-width: 800px;
-      padding: 20px;
-    }
-    footer {
-      background-color: #ddd;
-      padding: 10px;
-      width: 100%;
-      text-align: center;
+    canvas {
+      display: block;
+      image-rendering: pixelated;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Welcome to My Website!</h1>
-  </header>
-  <main>
-    <p>This site is hosted with GitHub Pages.</p>
-    <p>You can edit this file in your repo to update your content!</p>
-  </main>
-  <footer>
-    &copy; 2025 My Website
-  </footer>
+<canvas id="game"></canvas>
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const cowImg = new Image();
+  cowImg.src = 'https://i.imgur.com/nE0p6zh.png'; // Replace with your own 128x128 cow if needed
+
+  const keys = {};
+  window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+  window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+  const player = { x: 100, y: 100, speed: 2 };
+  const cows = Array.from({ length: 10 }, () => ({
+    x: Math.random() * 1000,
+    y: Math.random() * 1000,
+    dx: Math.random() < 0.5 ? -1 : 1,
+    dy: Math.random() < 0.5 ? -1 : 1
+  }));
+
+  function update() {
+    if (keys['w']) player.y -= player.speed;
+    if (keys['s']) player.y += player.speed;
+    if (keys['a']) player.x -= player.speed;
+    if (keys['d']) player.x += player.speed;
+
+    cows.forEach(cow => {
+      cow.x += cow.dx;
+      cow.y += cow.dy;
+      if (Math.random() < 0.01) cow.dx *= -1;
+      if (Math.random() < 0.01) cow.dy *= -1;
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const camX = player.x - canvas.width / 2 + 64;
+    const camY = player.y - canvas.height / 2 + 64;
+
+    // Draw other cows
+    cows.forEach(cow => {
+      ctx.drawImage(cowImg, cow.x - camX, cow.y - camY, 128, 128);
+    });
+
+    // Draw player cow
+    ctx.drawImage(cowImg, player.x - camX, player.y - camY, 128, 128);
+  }
+
+  function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  cowImg.onload = gameLoop;
+</script>
 </body>
 </html>
