@@ -1,128 +1,66 @@
-// main.js
-
-// Setup basic scene, camera, and renderer
+// Scene setup
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Create the ground
-const geometry = new THREE.PlaneGeometry(200, 200, 32, 32);
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
-const ground = new THREE.Mesh(geometry, material);
+// Light
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5, 10, 7.5);
+scene.add(light);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshStandardMaterial({ color: 0x228B22 })
+);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Fence setup (we'll make it as a boundary for death)
-const fenceMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-const fenceGeometry = new THREE.Geometry();
-fenceGeometry.vertices.push(new THREE.Vector3(-100, 0, -100));
-fenceGeometry.vertices.push(new THREE.Vector3(100, 0, -100));
-fenceGeometry.vertices.push(new THREE.Vector3(100, 0, 100));
-fenceGeometry.vertices.push(new THREE.Vector3(-100, 0, 100));
-fenceGeometry.vertices.push(new THREE.Vector3(-100, 0, -100));
-const fence = new THREE.LineLoop(fenceGeometry, fenceMaterial);
-scene.add(fence);
+// Fence bounds
+const BOUND = 40;
 
-// Camera position
-camera.position.z = 50;
-camera.position.y = 10;
-camera.lookAt(0, 0, 0);
+// Cow player
+const cow = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 2),
+  new THREE.MeshStandardMaterial({ color: 0xffffff })
+);
+cow.position.y = 0.5;
+scene.add(cow);
 
-// Movement controls
-let moveForward = false;
-let moveBackward = false;
-let rotateLeft = false;
-let rotateRight = false;
+// Controls
+let speed = 0.1;
+let turnSpeed = 0.05;
+let keys = {};
 
-// Key listener for WASD movement
-document.addEventListener("keydown", (event) => {
-    if (event.key === "w") moveForward = true;
-    if (event.key === "s") moveBackward = true;
-    if (event.key === "a") rotateLeft = true;
-    if (event.key === "d") rotateRight = true;
-});
+document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-document.addEventListener("keyup", (event) => {
-    if (event.key === "w") moveForward = false;
-    if (event.key === "s") moveBackward = false;
-    if (event.key === "a") rotateLeft = false;
-    if (event.key === "d") rotateRight = false;
-});
-
-// AI cow object
-const cows = [];
-function createCow() {
-    const cowGeometry = new THREE.BoxGeometry(5, 5, 5);
-    const cowMaterial = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff });
-    const cow = new THREE.Mesh(cowGeometry, cowMaterial);
-    cow.position.set(Math.random() * 100 - 50, 5, Math.random() * 100 - 50);
-    cows.push(cow);
-    scene.add(cow);
-}
-
-// AI cow movement logic
-function moveCows() {
-    cows.forEach((cow) => {
-        cow.position.x += (Math.random() - 0.5) * 2;
-        cow.position.z += (Math.random() - 0.5) * 2;
-    });
-}
-
-// Collision detection (check if player or cows are near the fence or each other)
-function checkCollisions(player) {
-    cows.forEach((cow) => {
-        const distance = player.position.distanceTo(cow.position);
-        if (distance < 5) {
-            playerDie();
-            cowDie(cow);
-        }
-    });
-
-    // Check if player or cows touch the fence boundary
-    if (
-        player.position.x > 100 || player.position.x < -100 ||
-        player.position.z > 100 || player.position.z < -100
-    ) {
-        playerDie();
-    }
-}
-
-// Player death handling
-function playerDie() {
-    console.log("Player hit the fence or cow!");
-    // Restart or reset player position here
-}
-
-// Cow death handling
-function cowDie(cow) {
-    console.log("Cow died!");
-    scene.remove(cow);
-}
-
-// Player movement logic
-const player = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-player.position.set(0, 5, 0);
-scene.add(player);
-
-function movePlayer() {
-    if (moveForward) player.position.z -= 0.5;
-    if (moveBackward) player.position.z += 0.5;
-    if (rotateLeft) player.rotation.y += 0.05;
-    if (rotateRight) player.rotation.y -= 0.05;
-}
-
-// Render loop
+// Game loop
 function animate() {
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    moveCows();
-    movePlayer();
-    checkCollisions(player);
+  // Movement
+  if (keys['w']) cow.position.z -= Math.cos(cow.rotation.y) * speed;
+  if (keys['s']) cow.position.z += Math.cos(cow.rotation.y) * speed;
+  if (keys['a']) cow.rotation.y += turnSpeed;
+  if (keys['d']) cow.rotation.y -= turnSpeed;
 
-    renderer.render(scene, camera);
+  // Camera follow
+  camera.position.x = cow.position.x - Math.sin(cow.rotation.y) * 5;
+  camera.position.y = 3;
+  camera.position.z = cow.position.z + Math.cos(cow.rotation.y) * 5;
+  camera.lookAt(cow.position);
+
+  // Death condition (outside bounds)
+  if (Math.abs(cow.position.x) > BOUND || Math.abs(cow.position.z) > BOUND) {
+    alert("You hit the fence and died!");
+    cow.position.set(0, 0.5, 0);
+    cow.rotation.set(0, 0, 0);
+  }
+
+  renderer.render(scene, camera);
 }
 
-createCow();  // Create an initial cow
 animate();
