@@ -41,6 +41,22 @@ world.addBody(cowBody);
 const cowGeometry = new THREE.SphereGeometry(1, 32, 32);
 const cowMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 const cowMesh = new THREE.Mesh(cowGeometry, cowMaterial);
+const keys = {
+  w: false,
+  a: false,
+  s: false,
+  d: false,
+};
+
+window.addEventListener('keydown', (e) => {
+  if (e.key in keys) keys[e.key] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.key in keys) keys[e.key] = false;
+});
+
+const moveSpeed = 10;
 scene.add(cowMesh);
 
 // Camera position
@@ -57,5 +73,30 @@ function animate() {
   cowMesh.quaternion.copy(cowBody.quaternion);
 
   renderer.render(scene, camera);
+}function animate() {
+  requestAnimationFrame(animate);
+
+  // Movement force
+  const force = new CANNON.Vec3(0, 0, 0);
+  if (keys.w) force.z -= moveSpeed;
+  if (keys.s) force.z += moveSpeed;
+  if (keys.a) force.x -= moveSpeed;
+  if (keys.d) force.x += moveSpeed;
+
+  cowBody.velocity.x = force.x;
+  cowBody.velocity.z = force.z;
+
+  world.step(1 / 60);
+
+  // Sync cow mesh
+  cowMesh.position.copy(cowBody.position);
+  cowMesh.quaternion.copy(cowBody.quaternion);
+
+  // Camera follow
+  camera.position.x = cowBody.position.x - 5;
+  camera.position.y = cowBody.position.y + 5;
+  camera.position.z = cowBody.position.z + 10;
+  camera.lookAt(cowBody.position);
+
+  renderer.render(scene, camera);
 }
-animate();
