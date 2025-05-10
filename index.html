@@ -1,152 +1,16 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exploding Cows Arena</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #111; }
+    body { margin: 0; overflow: hidden; }
     canvas { display: block; }
   </style>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from 'https://cdn.skypack.dev/three';
-    import * as CANNON from 'https://cdn.skypack.dev/cannon-es';let scene = new THREE.Scene();
-let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-let renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-let clock = new THREE.Clock();
-
-// Lighting
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 10, 7.5);
-scene.add(light);
-scene.add(new THREE.AmbientLight(0x404040));
-
-// Physics world
-const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-
-// Ground
-const groundBody = new CANNON.Body({ shape: new CANNON.Plane(), mass: 0 });
-groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-world.addBody(groundBody);
-
-const groundMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 50),
-  new THREE.MeshStandardMaterial({ color: 0x228822 })
-);
-groundMesh.rotation.x = -Math.PI / 2;
-scene.add(groundMesh);
-
-// Cow prefab
-function createCow(color, x, z) {
-  const radius = 1;
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 16, 16),
-    new THREE.MeshStandardMaterial({ color })
-  );
-  mesh.position.set(x, radius, z);
-  scene.add(mesh);
-
-  const body = new CANNON.Body({
-    mass: 1,
-    shape: new CANNON.Sphere(radius),
-    position: new CANNON.Vec3(x, radius, z),
-    linearDamping: 0.3
-  });
-  world.addBody(body);
-
-  return { mesh, body, alive: true };
-}
-
-const player = createCow(0xff4444, -5, 0);
-let bots = [
-  createCow(0x4444ff, 5, 0),
-  createCow(0x8844ff, 7, 3),
-  createCow(0x44ffff, -3, 6)
-];
-
-// Input
-const keys = {};
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-function handlePlayerInput() {
-  const force = 12;
-  if (keys['w']) player.body.applyForce(new CANNON.Vec3(0, 0, -force), player.body.position);
-  if (keys['s']) player.body.applyForce(new CANNON.Vec3(0, 0, force), player.body.position);
-  if (keys['a']) player.body.applyForce(new CANNON.Vec3(-force, 0, 0), player.body.position);
-  if (keys['d']) player.body.applyForce(new CANNON.Vec3(force, 0, 0), player.body.position);
-}
-
-function updateAI(bot) {
-  if (!bot.alive) return;
-  const toPlayer = player.body.position.vsub(bot.body.position);
-  toPlayer.y = 0;
-  toPlayer.normalize();
-  toPlayer.scale(6, toPlayer);
-  bot.body.applyForce(toPlayer, bot.body.position);
-}
-
-function checkCollisions() {
-  bots.forEach(bot => {
-    if (!bot.alive) return;
-    const dist = bot.body.position.vsub(player.body.position).length();
-    if (dist < 2) {
-      // Knockback
-      const dir = bot.body.position.vsub(player.body.position).unit();
-      dir.scale(150, dir);
-      bot.body.applyImpulse(dir, bot.body.position);
-
-      // Death if hit hard
-      if (bot.body.velocity.length() > 6) {
-        scene.remove(bot.mesh);
-        world.removeBody(bot.body);
-        bot.alive = false;
-        createExplosion(bot.body.position);
-      }
-    }
-  });
-}
-
-function createExplosion(pos) {
-  const geo = new THREE.SphereGeometry(2, 8, 8);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-  const boom = new THREE.Mesh(geo, mat);
-  boom.position.copy(pos);
-  scene.add(boom);
-  setTimeout(() => scene.remove(boom), 500);
-}
-
-function updateMeshFromBody(obj) {
-  obj.mesh.position.copy(obj.body.position);
-  obj.mesh.quaternion.copy(obj.body.quaternion);
-}
-
-function updateCamera() {
-  const offset = new THREE.Vector3(0, 8, -12);
-  const targetPos = new THREE.Vector3().copy(player.mesh.position).add(offset);
-  camera.position.lerp(targetPos, 0.1);
-  camera.lookAt(player.mesh.position);
-}
-
-function animate() {
-  requestAnimationFrame(animate);
-  handlePlayerInput();
-  bots.forEach(updateAI);
-  checkCollisions();
-
-  world.step(1 / 60);
-  updateMeshFromBody(player);
-  bots.forEach(bot => bot.alive && updateMeshFromBody(bot));
-
-  updateCamera();
-  renderer.render(scene, camera);
-}
-
-animate();
-
-  </script>
+  <canvas id="gameCanvas"></canvas>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
