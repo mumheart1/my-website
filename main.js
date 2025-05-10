@@ -1,175 +1,76 @@
-import * as THREE from 'https://cdn.skypack.dev/three';
-import * as CANNON from 'https://cdn.skypack.dev/cannon-es';
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
+// Set up the scene, camera, and renderer
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas') });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const world = new CANNON.World({
-  gravity: new CANNON.Vec3(0, -9.82, 0)
-});
+// Set up the physics world
+let world = new CANNON.World();
+world.gravity.set(0, -9.82, 0);
 
-const groundBody = new CANNON.Body({
-  shape: new CANNON.Plane(),
-  mass: 0
+// Add a floor to the world
+let groundMaterial = new CANNON.Material('ground');
+let groundBody = new CANNON.Body({
+    mass: 0,
+    position: new CANNON.Vec3(0, -1, 0)
 });
-groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+let groundShape = new CANNON.Plane();
+groundBody.addShape(groundShape);
 world.addBody(groundBody);
 
-const groundMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshBasicMaterial({ color: 0x55aa55 })
-);
-groundMesh.rotation.x = -Math.PI / 2;
-scene.add(groundMesh);
+// Create a basic cow model
+function createCow() {
+    let cowGeometry = new THREE.BoxGeometry(1, 1, 2);  // Simple box geometry for the cow
+    let cowMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    let cow = new THREE.Mesh(cowGeometry, cowMaterial);
 
-const fenceMeshes = [];
-const fenceBodies = [];
+    // Physics body for the cow
+    let cowBody = new CANNON.Body({
+        mass: 1,
+        position: new CANNON.Vec3(Math.random() * 10, 0.5, Math.random() * 10)
+    });
+    let cowShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 1));
+    cowBody.addShape(cowShape);
+    world.addBody(cowBody);
 
-function createFence(x, z, w, h) {
-  const geo = new THREE.BoxGeometry(w, 2, h);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x222222 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, 1, z);
-  scene.add(mesh);
-  fenceMeshes.push(mesh);
+    cow.userData = { body: cowBody };
 
-  const shape = new CANNON.Box(new CANNON.Vec3(w / 2, 1, h / 2));
-  const body = new CANNON.Body({ mass: 0, shape });
-  body.position.set(x, 1, z);
-  world.addBody(body);
-  fenceBodies.push(body);
+    scene.add(cow);
+    return cow;
 }
 
-createFence(0, -25, 100, 1);
-createFence(0, 25, 100, 1);
-createFence(-25, 0, 1, 100);
-createFence(25, 0, 1, 100);
-
-function createCow(color = 0xff0000, isPlayer = false) {
-  const body = new CANNON.Body({
-    mass: 1,
-    shape: new CANNON.Box(new CANNON.Vec3(1, 1, 2)),
-    position: new CANNON.Vec3((Math.random() - 0.5) * 40, 5, (Math.random() - 0.5) * 40),
-  });
-  world.addBody(body);
-
-  const geo = new THREE.BoxGeometry(2, 2, 4);
-  const mat = new THREE.MeshBasicMaterial({ color });
-  const mesh = new THREE.Mesh(geo, mat);
-  scene.add(mesh);
-
-  return { body, mesh, isPlayer, dead: false };
+// Add cows to the scene
+let cows = [];
+for (let i = 0; i < 5; i++) {
+    cows.push(createCow());
 }
 
-const cows = [];
-const playerCow = createCow(0x0000ff, true);
-cows.push(playerCow);
+// Set up the camera position
+camera.position.z = 10;
 
-for (let i = 0; i < 19; i++) {
-  cows.push(createCow());
-}
-
-camera.position.set(0, 10, -15);
-camera.lookAt(0, 0, 0);
-
-let keys = {};
-let joystick = null;
-
-// Joystick for mobile (using nipplejs)
-if ('ontouchstart' in window || navigator.maxTouchPoints) {
-  joystick = nipplejs.create({
-    zone: document.body,
-    mode: 'static',
-    position: { left: '50%', bottom: '20%' },
-    color: 'blue'
-  });
-
-  joystick.on('move', function (evt, data) {
-    const angle = data.angle.radian;
-    const magnitude = data.distance;
-
-    // Move the cow based on the joystick input
-    const speed = 10;
-    const turn = 2;
-
-    // Calculate movement based on joystick angle and magnitude
-    const forward = new CANNON.Vec3(0, 0, -1);
-    playerCow.body.quaternion.vmult(forward, forward);
-    playerCow.body.velocity.x = forward.x * magnitude * speed;
-    playerCow.body.velocity.z = forward.z * magnitude * speed;
-
-    // Turn the cow based on joystick angle
-    const turnDirection = new CANNON.Vec3(0, 1, 0);
-    playerCow.body.quaternion.setFromAxisAngle(turnDirection, angle);
-  });
-}
-
-function updatePlayer(cow) {
-  const speed = 10;
-  const turn = 2;
-  if (cow.dead) return;
-
-  if (keys['a']) cow.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), cow.body.quaternion.toEuler().y + 0.1);
-  if (keys['d']) cow.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), cow.body.quaternion.toEuler().y - 0.1);
-
-  const forward = new CANNON.Vec3(0, 0, -1);
-  cow.body.quaternion.vmult(forward, forward);
-
-  if (keys['w']) cow.body.velocity.vadd(forward.scale(speed), cow.body.velocity);
-  if (keys['s']) cow.body.velocity.vsub(forward.scale(speed), cow.body.velocity);
-}
-
-function updateAI(cow) {
-  if (cow.dead) return;
-
-  let target = cows.find(c => c !== cow && !c.dead);
-  if (!target) return;
-
-  const dir = target.body.position.vsub(cow.body.position);
-  dir.y = 0;
-  dir.normalize();
-
-  cow.body.velocity.x = dir.x * 5;
-  cow.body.velocity.z = dir.z * 5;
-}
-
-function handleCollisions(cow) {
-  if (cow.dead) return;
-  if (Math.abs(cow.body.position.x) > 49 || Math.abs(cow.body.position.z) > 49) {
-    cow.dead = true;
-    cow.mesh.material.color.set(0x222222);
-    cow.body.mass = 0;
-    cow.body.updateMassProperties();
-  }
-}
-
-function lockCamera() {
-  const pos = playerCow.body.position;
-  const forward = new THREE.Vector3(0, 2, -8).applyQuaternion(playerCow.mesh.quaternion);
-  camera.position.set(pos.x + forward.x, pos.y + 5, pos.z + forward.z);
-  camera.lookAt(pos.x, pos.y + 2, pos.z);
-}
-
+// Render loop
 function animate() {
-  requestAnimationFrame(animate);
-  world.step(1 / 60);
+    requestAnimationFrame(animate);
 
-  cows.forEach(cow => {
-    cow.mesh.position.copy(cow.body.position);
-    cow.mesh.quaternion.copy(cow.body.quaternion);
-    if (cow.isPlayer) {
-      updatePlayer(cow);
-    } else {
-      updateAI(cow);
-    }
-    handleCollisions(cow);
-  });
+    // Update the physics world
+    world.step(1 / 60);
 
-  lockCamera();
-  renderer.render(scene, camera);
+    // Update the cow positions
+    cows.forEach(cow => {
+        cow.position.copy(cow.userData.body.position);
+        cow.rotation.set(cow.userData.body.rotation.x, cow.userData.body.rotation.y, cow.userData.body.rotation.z);
+    });
+
+    // Render the scene
+    renderer.render(scene, camera);
 }
+
+// Handle window resizing
+window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+});
 
 animate();
