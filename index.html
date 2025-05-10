@@ -1,51 +1,119 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>AI Cow Sim</title>
+  <meta charset="UTF-8" />
+  <title>Exploding Cows Arena</title>
   <style>
-    canvas {
-      image-rendering: pixelated;
-      background: #444;
-      display: block;
-      margin: auto;
-    }
+    body { margin: 0; overflow: hidden; background: #111; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-<canvas id="game" width="128" height="128"></canvas>
-<script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const TILE_SIZE = 8;
-const MAP_SIZE = 16;const TILE = { EMPTY: 0, GRASS: 1, WATER: 2, WALL: 3, WOLF: 4 };
+  <script type="module">
+    import * as THREE from 'https://cdn.skypack.dev/three';
+    import { OrbitControls } from 'https://cdn.skypack.dev/three/examples/jsm/controls/OrbitControls.js';
+    import * as CANNON from 'https://cdn.skypack.dev/cannon-es';
 
-const COLORS = [ '#444', // Empty '#4CAF50', // Grass '#2196F3', // Water '#795548', // Wall '#FF0000'  // Wolf ];
+    let scene = new THREE.Scene();
+    let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    let renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-let map = []; let cow = { x: 1, y: 1, score: 0 };
+    let controls = new OrbitControls(camera, renderer.domElement);
+    camera.position.set(0, 15, 20);
+    controls.target.set(0, 0, 0);
+    controls.update();
 
-function generateMap() { map = []; for (let y = 0; y < MAP_SIZE; y++) { let row = []; for (let x = 0; x < MAP_SIZE; x++) { let rand = Math.random(); if (rand < 0.1) row.push(TILE.WALL); else if (rand < 0.2) row.push(TILE.WATER); else if (rand < 0.3) row.push(TILE.WOLF); else if (rand < 0.7) row.push(TILE.GRASS); else row.push(TILE.EMPTY); } map.push(row); } map[cow.y][cow.x] = TILE.EMPTY; // Clear cow spawn }
+    // Lighting
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 7.5);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x404040));
 
-generateMap();
+    // Physics world
+    const world = new CANNON.World({
+      gravity: new CANNON.Vec3(0, -9.82, 0),
+    });
 
-function drawMap() { for (let y = 0; y < MAP_SIZE; y++) { for (let x = 0; x < MAP_SIZE; x++) { ctx.fillStyle = COLORS[map[y][x]]; ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); } } // Draw cow ctx.fillStyle = '#FFFFFF'; ctx.fillRect(cow.x * TILE_SIZE, cow.y * TILE_SIZE, TILE_SIZE, TILE_SIZE); }
+    // Ground
+    const groundBody = new CANNON.Body({
+      shape: new CANNON.Plane(),
+      mass: 0,
+    });
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(groundBody);
 
-function sense(x, y) { // Get tile type or wall if out of bounds if (x < 0 || y < 0 || x >= MAP_SIZE || y >= MAP_SIZE) return TILE.WALL; return map[y][x]; }
+    const groundGeo = new THREE.PlaneGeometry(50, 50);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x228822 });
+    const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+    groundMesh.rotation.x = -Math.PI / 2;
+    scene.add(groundMesh);
 
-function updateCow() { // Get surroundings const up = sense(cow.x, cow.y - 1); const down = sense(cow.x, cow.y + 1); const left = sense(cow.x - 1, cow.y); const right = sense(cow.x + 1, cow.y);
+    // Create cow (sphere for now)
+    function createCow(color, x, z) {
+      const radius = 1;
+      const mat = new THREE.MeshStandardMaterial({ color });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
+      mesh.position.set(x, radius, z);
+      scene.add(mesh);
 
-const choices = [up, down, left, right]; const dir = choices.map((val, i) => { // Reward grass, avoid wolf, ignore walls if (val === TILE.GRASS) return 2; if (val === TILE.WATER) return 1.5; if (val === TILE.WOLF) return -3; if (val === TILE.WALL) return -2; return 0; });
+      const body = new CANNON.Body({
+        mass: 1,
+        shape: new CANNON.Sphere(radius),
+        position: new CANNON.Vec3(x, radius, z),
+        linearDamping: 0.2,
+      });
+      world.addBody(body);
 
-// Pick best direction let best = dir.indexOf(Math.max(...dir));
+      return { mesh, body };
+    }
 
-if (best === 0) cow.y--; if (best === 1) cow.y++; if (best === 2) cow.x--; if (best === 3) cow.x++;
+    const player = createCow(0xff4444, -5, 0);
+    const bot = createCow(0x4444ff, 5, 0);
 
-// Clamp position cow.x = Math.max(0, Math.min(MAP_SIZE - 1, cow.x)); cow.y = Math.max(0, Math.min(MAP_SIZE - 1, cow.y));
+    // Movement controls
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-// Eat grass or drink water const tile = sense(cow.x, cow.y); if (tile === TILE.GRASS || tile === TILE.WATER) { cow.score++; map[cow.y][cow.x] = TILE.EMPTY; } else if (tile === TILE.WOLF) { cow.score = 0; cow.x = 1; cow.y = 1; generateMap(); } }
+    function handlePlayerInput() {
+      const force = 10;
+      if (keys['w']) player.body.applyForce(new CANNON.Vec3(0, 0, -force), player.body.position);
+      if (keys['s']) player.body.applyForce(new CANNON.Vec3(0, 0, force), player.body.position);
+      if (keys['a']) player.body.applyForce(new CANNON.Vec3(-force, 0, 0), player.body.position);
+      if (keys['d']) player.body.applyForce(new CANNON.Vec3(force, 0, 0), player.body.position);
+    }
 
-function gameLoop() { updateCow(); drawMap(); requestAnimationFrame(gameLoop); }
+    // AI logic
+    function updateBotAI() {
+      const toPlayer = player.body.position.vsub(bot.body.position);
+      toPlayer.y = 0;
+      toPlayer.normalize();
+      toPlayer.scale(5, toPlayer);
+      bot.body.applyForce(toPlayer, bot.body.position);
+    }
 
-gameLoop(); </script>
+    // Sync physics and visuals
+    function updateMeshFromBody(obj) {
+      obj.mesh.position.copy(obj.body.position);
+      obj.mesh.quaternion.copy(obj.body.quaternion);
+    }
 
+    // Game loop
+    function animate() {
+      requestAnimationFrame(animate);
+      handlePlayerInput();
+      updateBotAI();
+
+      world.step(1/60);
+      updateMeshFromBody(player);
+      updateMeshFromBody(bot);
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
 </body>
 </html>
