@@ -25,6 +25,19 @@ const cow = new THREE.Mesh(
 cow.position.y = 0.5;
 scene.add(cow);
 
+const aiCows = [];
+const aiCowMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+
+for (let i = 0; i < 5; i++) {
+  const aiCow = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 2),
+    aiCowMaterial
+  );
+  aiCow.position.set(Math.random() * BOUND * 2 - BOUND, 0.5, Math.random() * BOUND * 2 - BOUND);
+  aiCows.push(aiCow);
+  scene.add(aiCow);
+}
+
 const fences = [];
 const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
 
@@ -54,6 +67,10 @@ let keys = {};
 document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
+function distance(a, b) {
+  return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
@@ -81,6 +98,16 @@ function animate() {
   camera.position.y = cow.position.y + 3;
   camera.position.z = cow.position.z + Math.cos(cow.rotation.y) * 5;
   camera.lookAt(cow.position);
+
+  aiCows.forEach(aiCow => {
+    const target = Math.random() < 0.5 ? cow : aiCows[Math.floor(Math.random() * aiCows.length)];
+    const dirX = target.position.x - aiCow.position.x;
+    const dirZ = target.position.z - aiCow.position.z;
+    const angle = Math.atan2(dirZ, dirX);
+    aiCow.rotation.y = angle;
+    aiCow.position.x += Math.sin(angle) * speed;
+    aiCow.position.z += Math.cos(angle) * speed;
+  });
 
   for (let fence of fences) {
     const dx = cow.position.x - fence.position.x;
