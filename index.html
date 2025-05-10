@@ -19,6 +19,9 @@
 </head>
 <body>
   <script>
+    // Check if THREE.js is working
+    console.log("Initializing Three.js scene...");
+
     // Set up scene, camera, and renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -45,6 +48,7 @@
     groundMesh.rotation.x = -Math.PI / 2;
     scene.add(groundMesh);
 
+    // Create fences for the cows
     const fenceMeshes = [];
     const fenceBodies = [];
 
@@ -68,6 +72,7 @@
     createFence(-25, 0, 1, 100);
     createFence(25, 0, 1, 100);
 
+    // Function to create a cow (player or AI)
     function createCow(color = 0xff0000, isPlayer = false) {
       const body = new CANNON.Body({
         mass: 1,
@@ -191,3 +196,10 @@
       lockCamera();
       renderer.render(scene, camera);
     }
+
+    // Debugging message to verify code execution
+    console.log("Starting animation...");
+    animate();
+  </script>
+</body>
+</html>
