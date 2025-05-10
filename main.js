@@ -62,6 +62,7 @@ let speed = 0.1;
 let turnSpeed = 0.05;
 let gravity = -0.02;
 let velocityY = 0;
+let knockbackForce = 0.2;
 let keys = {};
 
 document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
@@ -69,6 +70,41 @@ document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 function distance(a, b) {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
+}
+
+function aiChase(aiCow) {
+  const closestTarget = getClosestTarget(aiCow);
+  if (!closestTarget) return;
+
+  const dirX = closestTarget.position.x - aiCow.position.x;
+  const dirZ = closestTarget.position.z - aiCow.position.z;
+  const angle = Math.atan2(dirZ, dirX);
+
+  aiCow.rotation.y = angle;
+  aiCow.position.x += Math.sin(angle) * speed;
+  aiCow.position.z += Math.cos(angle) * speed;
+}
+
+function getClosestTarget(aiCow) {
+  let closestDist = Infinity;
+  let closestCow = null;
+
+  aiCows.forEach(otherCow => {
+    if (aiCow !== otherCow) {
+      const dist = distance(aiCow.position, otherCow.position);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestCow = otherCow;
+      }
+    }
+  });
+
+  const playerDist = distance(aiCow.position, cow.position);
+  if (playerDist < closestDist) {
+    closestCow = cow;
+  }
+
+  return closestCow;
 }
 
 function animate() {
@@ -92,21 +128,13 @@ function animate() {
     velocityY = 0;
   }
 
-  cow.rotation.z = keys['a'] ? 0.2 : keys['d'] ? -0.2 : 0;
-
   camera.position.x = cow.position.x - Math.sin(cow.rotation.y) * 5;
   camera.position.y = cow.position.y + 3;
   camera.position.z = cow.position.z + Math.cos(cow.rotation.y) * 5;
   camera.lookAt(cow.position);
 
   aiCows.forEach(aiCow => {
-    const target = Math.random() < 0.5 ? cow : aiCows[Math.floor(Math.random() * aiCows.length)];
-    const dirX = target.position.x - aiCow.position.x;
-    const dirZ = target.position.z - aiCow.position.z;
-    const angle = Math.atan2(dirZ, dirX);
-    aiCow.rotation.y = angle;
-    aiCow.position.x += Math.sin(angle) * speed;
-    aiCow.position.z += Math.cos(angle) * speed;
+    aiChase(aiCow);
   });
 
   for (let fence of fences) {
@@ -115,12 +143,23 @@ function animate() {
     const dz = cow.position.z - fence.position.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist < 1.2) {
-      alert("You hit the fence and died!");
-      cow.position.set(0, 0.5, 0);
-      cow.rotation.set(0, 0, 0);
-      velocityY = 0;
+      cow.position.x += Math.sin(cow.rotation.y) * knockbackForce;
+      cow.position.z += Math.cos(cow.rotation.y) * knockbackForce;
+      alert("You hit the fence and were knocked back!");
     }
   }
+
+  aiCows.forEach(aiCow => {
+    for (let fence of fences) {
+      const dx = aiCow.position.x - fence.position.x;
+      const dy = aiCow.position.y - fence.position.y;
+      const dz = aiCow.position.z - fence.position.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < 1.2) {
+        aiCow.position.y = -100; // AI cow falls and "dies"
+      }
+    }
+  });
 
   renderer.render(scene, camera);
 }
